@@ -17,12 +17,12 @@ def pickup_random_file(pathname, pattern=r".*"):
 
     for filename in filenames:
         if re.match(pattern, filename):
-            return filename
+            return os.path.abspath(filename)
 
     return None
 
 
-def post(src_filename, text):
+def post(api, src_filename, text):
     src_basename = os.path.basename(src_filename)
     prefix = int(time.time())
     dst_basename = f"{prefix} {src_basename}"
@@ -40,6 +40,7 @@ if __name__ == "__main__":
     abspath = os.path.abspath(__file__)
     os.chdir(os.path.dirname(abspath))
 
+    # Read config
     config = configparser.RawConfigParser()
     with open(CONFIG_FILENAME, "r", encoding="utf-8") as f:
         config.read_file(f)
@@ -49,6 +50,11 @@ if __name__ == "__main__":
     access_token = config.get("Twitter API", "access_token")
     access_token_secret = config.get("Twitter API", "access_token_secret")
 
+    stockpile_dirs = json.loads(config.get("Path", "stockpile_dirs"))
+    posted_dir = config.get("Path", "posted_dir")
+    text_dir = config.get("Path", "text_dir")
+
+    # Initialize tweepy
     auth = tweepy.OAuth1UserHandler(
         api_key,
         api_key_secret,
@@ -58,21 +64,32 @@ if __name__ == "__main__":
 
     api = tweepy.API(auth)
 
-    stockpile_dirs = json.loads(config.get("Path", "stockpile_dirs"))
-    posted_dir = config.get("Path", "posted_dir")
-    text_dir = config.get("Path", "text_dir")
-
-    text_filename = pickup_random_file(f"{text_dir}/*", r".*\.txt$")
-
-    if text_filename:
-        with open(text_filename, "r", encoding="utf-8") as f:
-            text = f.read()
-    else:
-        text = ""
+    # Random pickup of text and image filenames
+    text_filename = pickup_random_file(f"{text_dir}/*", r".*\.(txt|py)$")
+    media_filename = None
 
     for stockpile_dir in stockpile_dirs:
         media_filename = pickup_random_file(
             f"{stockpile_dir}/*", r".*\.(jpe?g|png|gif)$")
         if media_filename:
-            post(media_filename, text)
             break
+
+    # Generate tweet text
+    tweet = ""
+
+    if text_filename:
+        with open(text_filename, "r", encoding="utf-8") as f:
+            text = f.read()
+
+        if re.match(r".*\.py$", text_filename):
+            result = {}
+            exec(text, result)
+
+            if "tweet" in result:
+                tweet = result["tweet"](media_filename)
+        else:
+            tweet = text
+
+    # Tweet if image file is available
+    if media_filename:
+        post(api, media_filename, tweet)
