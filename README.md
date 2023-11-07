@@ -29,6 +29,7 @@ Copy `settings.example.ini` to `settings.ini` and edit the following section.
 
 ```setting.ini
 [Twitter API]
+bearer_token = (Bearer token)
 api_key = (Consumer API Key)
 api_key_secret = (Consumer API Secret)
 ```
