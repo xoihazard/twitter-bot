@@ -11,7 +11,7 @@ import tweepy
 CONFIG_FILENAME = "settings.ini"
 
 
-def pickup_random_file(pathname, pattern=r".*"):
+def pickup_random_file(pathname: str, pattern: str = r".*") -> str:
     filenames = glob.glob(pathname)
     random.shuffle(filenames)
 
@@ -22,7 +22,7 @@ def pickup_random_file(pathname, pattern=r".*"):
     return None
 
 
-def post(api, src_filename, text):
+def post(api: tweepy.API, client: tweepy.Client, src_filename: str, text: str) -> None:
     src_basename = os.path.basename(src_filename)
     prefix = int(time.time())
     dst_basename = f"{prefix} {src_basename}"
@@ -30,7 +30,7 @@ def post(api, src_filename, text):
 
     print(f"uploading: {src_filename}")
     media = api.media_upload(src_filename)
-    api.update_status(text, media_ids=[media.media_id])
+    client.create_tweet(text=text, media_ids=[media.media_id])
 
     shutil.move(src_filename, dst_filename)
     print(f"moved: {dst_filename}")
@@ -49,6 +49,7 @@ if __name__ == "__main__":
     api_key_secret = config.get("Twitter API", "api_key_secret")
     access_token = config.get("Twitter API", "access_token")
     access_token_secret = config.get("Twitter API", "access_token_secret")
+    bearer_token = config.get("Twitter API", "bearer_token")
 
     stockpile_dirs = json.loads(config.get("Path", "stockpile_dirs"))
     posted_dir = config.get("Path", "posted_dir")
@@ -62,7 +63,14 @@ if __name__ == "__main__":
         access_token_secret,
     )
 
-    api = tweepy.API(auth)
+    tweepy_api = tweepy.API(auth)
+    tweepy_client = tweepy.Client(
+        bearer_token=bearer_token,
+        consumer_key=api_key,
+        consumer_secret=api_key_secret,
+        access_token=access_token,
+        access_token_secret=access_token_secret,
+    )
 
     # Random pickup of text and image filenames
     text_filename = pickup_random_file(f"{text_dir}/*", r".*\.(txt|py)$")
@@ -70,7 +78,8 @@ if __name__ == "__main__":
 
     for stockpile_dir in stockpile_dirs:
         media_filename = pickup_random_file(
-            f"{stockpile_dir}/*", r".*\.(jpe?g|png|gif)$")
+            f"{stockpile_dir}/*", r".*\.(jpe?g|png|gif)$"
+        )
         if media_filename:
             break
 
@@ -92,4 +101,4 @@ if __name__ == "__main__":
 
     # Tweet if image file is available
     if media_filename:
-        post(api, media_filename, tweet)
+        post(tweepy_api, tweepy_client, media_filename, tweet)
